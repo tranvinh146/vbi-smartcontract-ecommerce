@@ -55,8 +55,8 @@ impl EcommerceContract {
         self.orders.insert(&order_id, &order);
 
         if env::attached_deposit() > order_amount.into() {
-            let promise =
-                Promise::new(env::predecessor_account_id()).transfer(env::attached_deposit());
+            let promise = Promise::new(env::predecessor_account_id())
+                .transfer(env::attached_deposit() - order_amount.0);
             PromiseOrValue::Promise(promise)
         } else {
             PromiseOrValue::Value(U128(0))
