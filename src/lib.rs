@@ -21,9 +21,9 @@ enum StorageKey {
     OrderKey,
 }
 
-enum Error {
-    ERROR_NOT_FOUND_ORDER_ID,
-}
+// enum Error {
+//     ERROR_NOT_FOUND_ORDER_ID,
+// }
 
 #[near_bindgen]
 impl EcommerceContract {
