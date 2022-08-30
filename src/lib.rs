@@ -6,13 +6,17 @@ use near_sdk::{
     PromiseOrValue, PromiseResult,
 };
 
+mod ft_contract;
 mod order;
+
+use ft_contract::*;
 use order::*;
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 #[near_bindgen]
 pub struct EcommerceContract {
     pub owner_id: AccountId,
+    pub ft_contract_id: AccountId,
     pub orders: LookupMap<OrderId, Order>,
 }
 
@@ -30,9 +34,10 @@ pub const SET_REFUND_GAS: Gas = Gas(10_000_000_000_000);
 #[near_bindgen]
 impl EcommerceContract {
     #[init]
-    pub fn new(owner_id: AccountId) -> Self {
+    pub fn new(owner_id: AccountId, ft_contract_id: AccountId) -> Self {
         Self {
             owner_id,
+            ft_contract_id,
             orders: LookupMap::new(StorageKey::OrderKey),
         }
     }
@@ -45,9 +50,18 @@ impl EcommerceContract {
             ERROR_DEPOSIT_NOT_ENOUGH
         );
 
+        let order_optional = self.orders.get(&order_id);
+        match order_optional {
+            Some(order) => {
+                assert!(!order.is_completed)
+            }
+            None => {}
+        }
+
         let order = Order {
             order_id: order_id.clone(),
             payer_id: env::predecessor_account_id(),
+            payment_method: PaymentMethod::NEAR,
             amount: order_amount.into(),
             received_amount: env::attached_deposit(),
             is_completed: true,
@@ -70,20 +84,41 @@ impl EcommerceContract {
         self.orders.get(&order_id).expect(ERROR_NOT_FOUND_ORDER_ID)
     }
 
-    pub fn cancel_order(&self, order_id: OrderId) -> PromiseOrValue<U128> {
+    pub fn cancel_order(&mut self, order_id: OrderId) -> PromiseOrValue<U128> {
         assert_eq!(env::predecessor_account_id(), self.owner_id);
 
         let order = self.get_order(order_id.clone());
         assert!(order.is_completed && !order.is_refund);
 
         if order.amount > 0 {
-            let promise = Promise::new(order.payer_id).transfer(order.amount).then(
-                ext_self::ext(env::current_account_id())
-                    .with_attached_deposit(0)
-                    .with_static_gas(SET_REFUND_GAS)
-                    .set_is_refunded(order_id),
-            );
-            PromiseOrValue::Promise(promise)
+            match order.payment_method {
+                PaymentMethod::NEAR => {
+                    let promise = Promise::new(order.payer_id).transfer(order.amount).then(
+                        ext_self::ext(env::current_account_id())
+                            .with_attached_deposit(0)
+                            .with_static_gas(SET_REFUND_GAS)
+                            .set_is_refunded(order_id),
+                    );
+                    PromiseOrValue::Promise(promise)
+                }
+                PaymentMethod::FungibleToken => {
+                    let promise = ext_ft::ext(self.ft_contract_id.clone())
+                        .with_attached_deposit(1)
+                        .with_static_gas(SET_REFUND_GAS)
+                        .ft_transfer(
+                            order.payer_id,
+                            U128(order.amount),
+                            Some("Refund order from FT contract".to_owned()),
+                        )
+                        .then(
+                            ext_self::ext(env::current_account_id())
+                                .with_attached_deposit(0)
+                                .with_static_gas(SET_REFUND_GAS)
+                                .set_is_refunded(order_id),
+                        );
+                    PromiseOrValue::Promise(promise)
+                }
+            }
         } else {
             PromiseOrValue::Value(U128(0))
         }
@@ -143,7 +178,7 @@ mod tests {
 
         testing_env!(context.build());
 
-        let mut contract = EcommerceContract::new(alice());
+        let mut contract = EcommerceContract::new(alice(), /*Change later */ alice());
         let order_id: OrderId = String::from("order_1");
         let order_amount = U128::from(1);
         contract.pay_order(order_id.clone(), order_amount);
@@ -164,7 +199,7 @@ mod tests {
 
         testing_env!(context.build());
 
-        let mut contract = EcommerceContract::new(alice());
+        let mut contract = EcommerceContract::new(alice(), /*Change later */ alice());
         let order_id: OrderId = String::from("order_2");
         let order_amount = U128::from(2);
         contract.pay_order(order_id.clone(), order_amount);
