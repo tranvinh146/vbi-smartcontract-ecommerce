@@ -5,7 +5,7 @@ use crate::*;
 
 pub type OrderId = String;
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub enum PaymentMethod {
     NEAR,

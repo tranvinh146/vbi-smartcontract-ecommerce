@@ -178,7 +178,7 @@ mod tests {
 
         testing_env!(context.build());
 
-        let mut contract = EcommerceContract::new(alice(), /*Change later */ alice());
+        let mut contract = EcommerceContract::new(alice(), alice());
         let order_id: OrderId = String::from("order_1");
         let order_amount = U128::from(1);
         contract.pay_order(order_id.clone(), order_amount);
@@ -188,6 +188,7 @@ mod tests {
         assert_eq!(order.order_id, order_id.clone());
         assert_eq!(order.amount, order_amount.into());
         assert_eq!(order.payer_id, env::predecessor_account_id());
+        assert_eq!(order.payment_method, PaymentMethod::NEAR);
         assert_eq!(order.is_completed, true);
     }
 
@@ -199,7 +200,7 @@ mod tests {
 
         testing_env!(context.build());
 
-        let mut contract = EcommerceContract::new(alice(), /*Change later */ alice());
+        let mut contract = EcommerceContract::new(alice(), alice());
         let order_id: OrderId = String::from("order_2");
         let order_amount = U128::from(2);
         contract.pay_order(order_id.clone(), order_amount);
